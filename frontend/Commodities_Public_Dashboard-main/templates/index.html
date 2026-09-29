@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WASDE Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    body { padding: 1rem 2rem; }
+    .filter-bar { display: flex; gap: 1rem; align-items: end; flex-wrap: wrap; margin-bottom: 1rem; }
+    .filter-bar .form-group { display: flex; flex-direction: column; min-width: 180px; }
+    .filter-bar label { font-weight: 600; font-size: .85rem; margin-bottom: .25rem; }
+    .tab-pane table th { white-space: nowrap; }
+    .tab-pane table td { text-align: right; white-space: nowrap; }
+    .tab-pane table td:first-child,
+    .tab-pane table td:nth-child(2) { text-align: left; }
+    .loading { display: none; }
+    .dataTables_wrapper { font-size: .9rem; }
+
+
+  </style>
+</head>
+<body>
+
+<h4 class="mb-3">WASDE Data Explorer</h4>
+
+<ul class="nav nav-tabs mb-3" id="mainTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="tab-regional" data-bs-toggle="tab" data-bs-target="#pane-regional" type="button" role="tab">Regional Comparison</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-time" data-bs-toggle="tab" data-bs-target="#pane-time" type="button" role="tab">Time Comparison (World)</button>
+  </li>
+
+</ul>
+
+<div class="tab-content">
+
+<!-- ═══════════ Tab 1: Regional Comparison ═══════════ -->
+<div class="tab-pane fade show active" id="pane-regional" role="tabpanel">
+  <div class="filter-bar">
+    <div class="form-group">
+      <label for="sel-report-type">Report Type</label>
+      <select id="sel-report-type" class="form-select form-select-sm"></select>
+    </div>
+    <div class="form-group">
+      <label for="sel-scope">Scope</label>
+      <select id="sel-scope" class="form-select form-select-sm"></select>
+    </div>
+    <div class="form-group">
+      <label for="sel-commodity">Commodity</label>
+      <select id="sel-commodity" class="form-select form-select-sm"></select>
+    </div>
+    <div class="form-group">
+      <label for="sel-date">Report Date</label>
+      <select id="sel-date" class="form-select form-select-sm"></select>
+    </div>
+    <div class="form-group">
+      <label for="sel-market-year">Market Year</label>
+      <select id="sel-market-year" class="form-select form-select-sm"></select>
+    </div>
+    <div class="form-group">
+      <span class="loading text-muted small" id="loading1">Loading…</span>
+    </div>
+    <div class="form-group" style="flex-direction:row; gap:.5rem;">
+      <button class="btn btn-outline-secondary btn-sm" onclick="copyTable('pivot-table')">&#128203; Copy</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="downloadCSV('pivot-table','wasde_regional.csv')">&#11015; CSV</button>
+    </div>
+  </div>
+  <div style="overflow-x:auto;">
+    <table id="pivot-table" class="table table-striped table-bordered table-sm" style="width:100%">
+      <thead><tr><th></th></tr></thead><tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════ Tab 2: Time Comparison (World) ═══════════ -->
+<div class="tab-pane fade" id="pane-time" role="tabpanel">
+  <div class="filter-bar">
+    <div class="form-group">
+      <label for="sel2-commodity">Commodity</label>
+      <select id="sel2-commodity" class="form-select form-select-sm"></select>
+    </div>
+    <div class="form-group">
+      <label for="sel2-region">Region</label>
+      <select id="sel2-region" class="form-select form-select-sm"></select>
+    </div>
+    <div class="form-group">
+      <label for="sel2-attribute">Attribute</label>
+      <select id="sel2-attribute" class="form-select form-select-sm"></select>
+    </div>
+    <div class="form-group">
+      <label for="sel2-market-year">Market Year</label>
+      <select id="sel2-market-year" class="form-select form-select-sm"></select>
+    </div>
+    <div class="form-group">
+      <span class="loading text-muted small" id="loading2">Loading…</span>
+    </div>
+    <div class="form-group" style="flex-direction:row; gap:.5rem;">
+      <button class="btn btn-outline-secondary btn-sm" id="btn-toggle-order">&#8644; Oldest First</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="copyTable('time-table')">&#128203; Copy</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="downloadCSV('time-table','wasde_time.csv')">&#11015; CSV</button>
+    </div>
+  </div>
+
+  <!-- Chart: all years as separate lines -->
+  <div class="mb-3" style="position:relative; height:400px;">
+    <canvas id="year-chart"></canvas>
+  </div>
+
+  <!-- Stats summary -->
+  <div class="row mb-3" id="stats-panel" style="display:none;">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header fw-semibold">Aggregate Statistics (First→Last Change Across All Years)</div>
+        <div class="card-body" id="stats-aggregate"></div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header fw-semibold">Per-Year Summary</div>
+        <div class="card-body" style="max-height:300px; overflow-y:auto;">
+          <table class="table table-sm table-bordered" id="stats-year-table">
+            <thead><tr><th>Year</th><th>First</th><th>Last</th><th>Change</th><th>%</th><th>Biggest Drop</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table id="time-table" class="table table-striped table-bordered table-sm" style="width:100%">
+      <thead><tr><th></th></tr></thead><tbody></tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /tab-content -->
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// Shared helpers
+// ═══════════════════════════════════════════════════════════════════════════
+function fillSelect($sel, items, keepValue) {
+  const prev = keepValue ? $sel.val() : null;
+  $sel.empty();
+  items.forEach(i => $sel.append(`<option value="${i}">${i}</option>`));
+  if (prev && items.includes(prev)) $sel.val(prev);
+}
+
+function tableToTSV(tableId) {
+  const $t = $('#' + tableId);
+  const rows = [];
+  // Header
+  const hdr = [];
+  $t.find('thead th').each(function () { hdr.push($(this).text()); });
+  rows.push(hdr.join('\t'));
+  // Body — use DataTables API if available to get all rows (not just current page)
+  if ($.fn.DataTable.isDataTable('#' + tableId)) {
+    const api = $t.DataTable();
+    api.rows({ search: 'applied' }).every(function () {
+      const d = this.data();
+      const cells = hdr.map((_, i) => {
+        const col = api.settings()[0].aoColumns[i];
+        const key = col.data;
+        let v = (key && d[key] !== null && d[key] !== undefined) ? String(d[key]) : '';
+        return v.replace(/[▲▼]/g, '').trim();
+      });
+      rows.push(cells.join('\t'));
+    });
+  } else {
+    $t.find('tbody tr').each(function () {
+      const cells = [];
+      $(this).find('td').each(function () { cells.push($(this).text().replace(/[▲▼]/g, '').trim()); });
+      rows.push(cells.join('\t'));
+    });
+  }
+  return rows.join('\n');
+}
+
+function copyTable(tableId) {
+  const text = tableToTSV(tableId);
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Table copied to clipboard');
+  });
+}
+
+function downloadCSV(tableId, filename) {
+  const $t = $('#' + tableId);
+  const rows = [];
+  const hdr = [];
+  $t.find('thead th').each(function () { hdr.push('"' + $(this).text().replace(/"/g, '""') + '"'); });
+  rows.push(hdr.join(','));
+  if ($.fn.DataTable.isDataTable('#' + tableId)) {
+    const api = $t.DataTable();
+    api.rows({ search: 'applied' }).every(function () {
+      const d = this.data();
+      const cells = hdr.map((_, i) => {
+        const col = api.settings()[0].aoColumns[i];
+        const key = col.data;
+        let v = (key && d[key] !== null && d[key] !== undefined) ? String(d[key]) : '';
+        v = v.replace(/[▲▼]/g, '').trim();
+        return '"' + v.replace(/"/g, '""') + '"';
+      });
+      rows.push(cells.join(','));
+    });
+  } else {
+    $t.find('tbody tr').each(function () {
+      const cells = [];
+      $(this).find('td').each(function () {
+        const v = $(this).text().replace(/[▲▼]/g, '').trim();
+        cells.push('"' + v.replace(/"/g, '""') + '"');
+      });
+      rows.push(cells.join(','));
+    });
+  }
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function fmtNumber(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  if (isNaN(n)) return v;
+  const dec = n % 1 !== 0 ? 2 : 0;
+  return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab 1: Regional Comparison
+// ═══════════════════════════════════════════════════════════════════════════
+(function () {
+  const $reportType = $('#sel-report-type');
+  const $scope      = $('#sel-scope');
+  const $commodity  = $('#sel-commodity');
+  const $date       = $('#sel-date');
+  const $marketYear = $('#sel-market-year');
+  const $loading    = $('#loading1');
+  let dt = null;
+
+  function showLoading() { $loading.show(); }
+  function hideLoading() { $loading.hide(); }
+
+  function fetchReportTypes() {
+    showLoading();
+    $.getJSON('/api/report_types', function (data) {
+      fillSelect($reportType, data.report_types);
+      hideLoading();
+      fetchScopes();
+    });
+  }
+
+  function fetchScopes() {
+    const report_title = $reportType.val();
+    showLoading();
+    $.getJSON('/api/filters', { report_title }, function (data) {
+      fillSelect($scope, data.scopes, true);
+      hideLoading();
+      fetchCommodities();
+    });
+  }
+
+  function fetchCommodities() {
+    const scope = $scope.val();
+    const report_title = $reportType.val();
+    if (!scope) return;
+    showLoading();
+    $.getJSON('/api/commodities', { scope, report_title }, function (data) {
+      fillSelect($commodity, data.commodities, true);
+      hideLoading();
+      fetchDates();
+    });
+  }
+
+  function fetchDates() {
+    const commodity = $commodity.val();
+    const scope = $scope.val();
+    if (!commodity || !scope) return;
+    showLoading();
+    $.getJSON('/api/dates', { commodity, scope }, function (data) {
+      fillSelect($date, data.dates);
+      hideLoading();
+      fetchMarketYears();
+    });
+  }
+
+  function fetchMarketYears() {
+    const commodity = $commodity.val();
+    const scope = $scope.val();
+    const report_date = $date.val();
+    if (!commodity || !scope || !report_date) return;
+    showLoading();
+    $.getJSON('/api/market_years', { commodity, scope, report_date }, function (data) {
+      fillSelect($marketYear, data.market_years);
+      hideLoading();
+      fetchTable();
+    });
+  }
+
+  function fetchTable() {
+    const commodity   = $commodity.val();
+    const scope       = $scope.val();
+    const report_date = $date.val();
+    const market_year = $marketYear.val();
+    if (!commodity || !scope || !report_date || !market_year) return;
+
+    showLoading();
+    $.getJSON('/api/table', { commodity, scope, report_date, market_year }, function (data) {
+      renderTable(data.columns, data.rows);
+      hideLoading();
+    });
+  }
+
+  function renderTable(regionCols, rows) {
+    if (dt) { dt.destroy(); $('#pivot-table').empty(); }
+    if (!rows.length) {
+      $('#pivot-table').html('<thead><tr><th>No data for this selection</th></tr></thead><tbody></tbody>');
+      return;
+    }
+    const dtColumns = [
+      { data: 'attribute', title: 'Attribute', className: 'fw-semibold' },
+      { data: 'unit', title: 'Unit' },
+    ];
+    regionCols.forEach(r => {
+      dtColumns.push({ data: r, title: r, render: fmtNumber, className: 'text-end' });
+    });
+    dt = $('#pivot-table').DataTable({
+      data: rows, columns: dtColumns,
+      paging: false, scrollX: true, scrollY: '70vh', scrollCollapse: true,
+      ordering: true, order: [[0, 'asc']], info: true, searching: true, autoWidth: false,
+    });
+  }
+
+  $reportType.on('change', fetchScopes);
+  $scope.on('change', fetchCommodities);
+  $commodity.on('change', fetchDates);
+  $date.on('change', fetchMarketYears);
+  $marketYear.on('change', fetchTable);
+
+  fetchReportTypes();
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab 2: Time Comparison (World)
+// ═══════════════════════════════════════════════════════════════════════════
+(function () {
+  const $commodity  = $('#sel2-commodity');
+  const $region     = $('#sel2-region');
+  const $attribute  = $('#sel2-attribute');
+  const $marketYear = $('#sel2-market-year');
+  const $loading    = $('#loading2');
+  let dt = null;
+  let chart = null;
+  let initialized = false;
+
+  const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const COLORS = [
+    '#2563eb','#dc2626','#16a34a','#9333ea','#ea580c','#0891b2',
+    '#4f46e5','#be185d','#15803d','#b45309','#6d28d9','#0d9488',
+    '#7c3aed','#e11d48','#065f46','#92400e','#1d4ed8','#db2777',
+  ];
+
+  function showLoading() { $loading.show(); }
+  function hideLoading() { $loading.hide(); }
+
+  function init() {
+    if (initialized) return;
+    initialized = true;
+    fetchCommodities();
+  }
+
+  function fetchCommodities() {
+    showLoading();
+    $.getJSON('/api/commodities', { scope: 'World' }, function (data) {
+      fillSelect($commodity, data.commodities, true);
+      hideLoading();
+      fetchRegions();
+    });
+  }
+
+  function fetchRegions() {
+    const commodity = $commodity.val();
+    if (!commodity) return;
+    showLoading();
+    $.getJSON('/api/world/regions', { commodity }, function (data) {
+      fillSelect($region, data.regions, true);
+      hideLoading();
+      fetchAttributes();
+    });
+  }
+
+  function fetchAttributes() {
+    const commodity = $commodity.val();
+    const region = $region.val();
+    if (!commodity || !region) return;
+    showLoading();
+    $.getJSON('/api/world/attributes', { commodity, region }, function (data) {
+      fillSelect($attribute, data.attributes, true);
+      hideLoading();
+      fetchMarketYears();
+    });
+  }
+
+  function fetchMarketYears() {
+    const commodity = $commodity.val();
+    const region = $region.val();
+    if (!commodity || !region) return;
+    showLoading();
+    $.getJSON('/api/world/market_years', { commodity, region }, function (data) {
+      fillSelect($marketYear, data.market_years, true);
+      hideLoading();
+      fetchAll();
+    });
+  }
+
+  function fetchAll() {
+    fetchChart();
+    fetchTable();
+  }
+
+  function fetchChart() {
+    const commodity = $commodity.val();
+    const region = $region.val();
+    const attribute = $attribute.val();
+    if (!commodity || !region || !attribute) return;
+
+    showLoading();
+    $.getJSON('/api/world/chart', { commodity, region, attribute }, function (data) {
+      renderChart(data.series);
+      renderStats(data.stats, data.year_summaries);
+      hideLoading();
+    });
+  }
+
+  function renderChart(series) {
+    if (chart) { chart.destroy(); chart = null; }
+    if (!series.length) return;
+
+    const datasets = series.map((s, i) => ({
+      label: s.market_year,
+      data: MONTH_LABELS.map((_, mi) => {
+        const idx = s.months.indexOf(mi + 1);
+        return idx >= 0 ? s.values[idx] : null;
+      }),
+      borderColor: COLORS[i % COLORS.length],
+      backgroundColor: COLORS[i % COLORS.length] + '22',
+      tension: 0.3,
+      pointRadius: 3,
+      borderWidth: i === 0 ? 3 : 1.5,
+      spanGaps: true,
+    }));
+
+    const ctx = document.getElementById('year-chart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: MONTH_LABELS, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+          title: { display: true, text: $commodity.val() + ' – ' + $region.val() + ' – ' + $attribute.val(), font: { size: 14 } },
+        },
+        scales: {
+          x: { title: { display: true, text: 'Report Month' } },
+          y: { title: { display: true, text: 'Value' } },
+        },
+      },
+    });
+  }
+
+  function renderStats(stats, yearSummaries) {
+    const $panel = $('#stats-panel');
+    if (!stats || !Object.keys(stats).length) { $panel.hide(); return; }
+    $panel.show();
+
+    $('#stats-aggregate').html(
+      '<table class="table table-sm mb-0">' +
+      '<tr><td class="fw-semibold">Mean Change (First→Last)</td><td class="text-end">' + fmtNumber(stats.mean_change) + '</td></tr>' +
+      '<tr><td class="fw-semibold">Median Change</td><td class="text-end">' + fmtNumber(stats.median_change) + '</td></tr>' +
+      '<tr><td class="fw-semibold">Biggest Reduction</td><td class="text-end text-danger">' + fmtNumber(stats.biggest_reduction) + '</td></tr>' +
+      '<tr><td class="fw-semibold">Biggest Increase</td><td class="text-end text-success">' + fmtNumber(stats.biggest_increase) + '</td></tr>' +
+      '</table>'
+    );
+
+    const $tbody = $('#stats-year-table tbody');
+    $tbody.empty();
+    (yearSummaries || []).forEach(s => {
+      const changeClass = s.total_change < 0 ? 'text-danger' : (s.total_change > 0 ? 'text-success' : '');
+      $tbody.append(
+        '<tr><td>' + s.market_year + '</td>' +
+        '<td class="text-end">' + fmtNumber(s.first) + '</td>' +
+        '<td class="text-end">' + fmtNumber(s.last) + '</td>' +
+        '<td class="text-end ' + changeClass + '">' + fmtNumber(s.total_change) + '</td>' +
+        '<td class="text-end ' + changeClass + '">' + (s.pct_change !== null ? s.pct_change + '%' : '') + '</td>' +
+        '<td class="text-end text-danger">' + fmtNumber(s.biggest_monthly_drop) + '</td></tr>'
+      );
+    });
+  }
+
+  let newestFirst = true; // default: newest on left
+  let lastDateCols = [];
+  let lastRows = [];
+
+  function fetchTable() {
+    const commodity   = $commodity.val();
+    const region      = $region.val();
+    const market_year = $marketYear.val();
+    if (!commodity || !region || !market_year) return;
+
+    showLoading();
+    $.getJSON('/api/world/time_table', { commodity, region, market_year }, function (data) {
+      lastDateCols = data.columns;
+      lastRows = data.rows;
+      renderTable();
+      hideLoading();
+    });
+  }
+
+  function renderTable() {
+    if (dt) { dt.destroy(); $('#time-table').empty(); }
+    if (!lastRows.length) {
+      $('#time-table').html('<thead><tr><th>No data for this selection</th></tr></thead><tbody></tbody>');
+      return;
+    }
+    const dateCols = newestFirst ? lastDateCols : [...lastDateCols].reverse();
+    const dtColumns = [
+      { data: 'attribute', title: 'Attribute', className: 'fw-semibold' },
+      { data: 'unit', title: 'Unit' },
+    ];
+    dateCols.forEach((d, idx) => {
+      // For arrows: compare to the chronologically previous report
+      // newest-first: next col is older; oldest-first: prev col is older
+      const olderCol = newestFirst
+        ? (idx < dateCols.length - 1 ? dateCols[idx + 1] : null)
+        : (idx > 0 ? dateCols[idx - 1] : null);
+      dtColumns.push({
+        data: d, title: d, className: 'text-end',
+        render: function (val, type, row) {
+          const txt = fmtNumber(val);
+          if (type !== 'display' || val === null || val === undefined) return txt;
+          if (!olderCol) return txt;
+          const prev = row[olderCol];
+          if (prev === null || prev === undefined) return txt;
+          if (val > prev) return '<span style="color:#198754">' + txt + ' &#9650;</span>';
+          if (val < prev) return '<span style="color:#dc3545">' + txt + ' &#9660;</span>';
+          return txt;
+        },
+      });
+    });
+    dt = $('#time-table').DataTable({
+      data: lastRows, columns: dtColumns,
+      paging: false, scrollX: true, scrollY: '70vh', scrollCollapse: true,
+      ordering: true, order: [[0, 'asc']], info: true, searching: true, autoWidth: false,
+    });
+  }
+
+  $('#btn-toggle-order').on('click', function () {
+    newestFirst = !newestFirst;
+    $(this).html(newestFirst ? '&#8644; Oldest First' : '&#8644; Newest First');
+    if (lastRows.length) renderTable();
+  });
+
+  $commodity.on('change', fetchRegions);
+  $region.on('change', fetchAttributes);
+  $attribute.on('change', fetchChart);
+  $marketYear.on('change', fetchTable);
+
+  // Load data when tab is first shown
+  $('#tab-time').on('shown.bs.tab', init);
+})();
+
+</script>
+</body>
+</html>

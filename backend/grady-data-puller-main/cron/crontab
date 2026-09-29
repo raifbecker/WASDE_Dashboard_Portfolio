@@ -1,0 +1,45 @@
+# Crontab for grady-data-puller
+# All times are in CST (America/Chicago)
+# Install with: crontab /path/to/project/cron/crontab
+#
+# Set PROJECT and LOGDIR below to paths on your machine.
+
+SHELL=/bin/bash
+CRON_TZ=America/Chicago
+PROJECT=/path/to/project
+LOGDIR=/path/to/project/cron/logs
+
+# ┌───────── minute (0-59)
+# │ ┌─────── hour (0-23)
+# │ │ ┌───── day of month (1-31)
+# │ │ │ ┌─── month (1-12)
+# │ │ │ │ ┌─ day of week (0=Sun, 1=Mon, ..., 6=Sat)
+# │ │ │ │ │
+
+# === WASDE CSV (monthly report) ===
+# Daily from 8th-15th of each month at 2:00 PM CST (report publishes ~noon on report day)
+0 14 8-15 * *  $PROJECT/cron/update_wasde_csv.sh >> $LOGDIR/wasde_csv.log 2>&1
+
+# === WASDE ROUGH TXT (preliminary report) ===
+# Daily from 8th-12th of each month at 1:00 PM CST (grab it as soon as it's posted)
+0 13 8-12 * *  $PROJECT/cron/update_wasde_rough.sh >> $LOGDIR/wasde_rough.log 2>&1
+
+# === PROMOTE ROUGH ===
+# Run on 15th of each month at 3:00 PM CST (by then the final CSV should be available)
+0 15 15 * *  $PROJECT/cron/promote_rough.sh >> $LOGDIR/promote_rough.log 2>&1
+
+# === NASS PROSPECTIVE PLANTINGS ===
+# Released end of March; run April 1st at 6:00 AM CST
+0 6 1 4 *  $PROJECT/cron/update_nass_prospective_plantings.sh >> $LOGDIR/nass_plantings.log 2>&1
+
+# === NASS ACREAGE ===
+# Released end of June; run July 1st at 6:00 AM CST
+0 6 1 7 *  $PROJECT/cron/update_nass_acreage.sh >> $LOGDIR/nass_acreage.log 2>&1
+
+# === NASS GRAIN STOCKS ===
+# Released quarterly (end of Mar, Jun, Sep, Dec); run 1st of Jan, Apr, Jul, Oct at 6:30 AM CST
+30 6 1 1,4,7,10 *  $PROJECT/cron/update_nass_grain_stocks.sh >> $LOGDIR/nass_grain_stocks.log 2>&1
+
+# === NASS CROP PROGRESS ===
+# Released weekly on Monday during growing season (Apr-Nov); run Tuesday at 7:00 AM CST
+0 7 * 4-11 2  $PROJECT/cron/update_nass_crop_progress.sh >> $LOGDIR/nass_crop_progress.log 2>&1
