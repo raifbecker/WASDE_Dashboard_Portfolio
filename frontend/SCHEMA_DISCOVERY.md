@@ -1,6 +1,6 @@
 # WASDE Database Schema Discovery
 
-## Database: `backend/grady-data-puller-main/data/wasde.db` (SQLite)
+## Database: `backend/data/wasde.db` (SQLite)
 
 The counts below are a snapshot of the local WASDE CSV pull on September 29, 2026. They will change when more reports or NASS data are loaded. The database is not committed to this repository.
 

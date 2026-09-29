@@ -6,8 +6,8 @@
 
 SHELL=/bin/bash
 CRON_TZ=America/Chicago
-PROJECT=/path/to/repo/backend/grady-data-puller-main
-LOGDIR=/path/to/repo/backend/grady-data-puller-main/cron/logs
+PROJECT=/path/to/repo/backend
+LOGDIR=/path/to/repo/backend/cron/logs
 
 # ┌───────── minute (0-59)
 # │ ┌─────── hour (0-23)
