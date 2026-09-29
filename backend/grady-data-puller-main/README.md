@@ -35,6 +35,23 @@ This will:
 
 The database is created at `wasde.db` in the project root.
 
+## Docker Cron Jobs
+
+The scheduled scripts in `cron/` run the loader in a Docker container. The
+SQLite database and downloaded reports persist in `data/` on the host.
+
+Build and run a job manually from this directory:
+
+```bash
+docker compose build loader
+docker compose run --rm loader --db /app/data/wasde.db --load-csv
+```
+
+Each cron script builds the image if needed, runs its loader command, and exits
+when the job completes. Install `cron/crontab` after replacing `PROJECT` and
+`LOGDIR` with absolute paths. The host running cron needs Docker Compose access
+and permission to use the Docker daemon.
+
 ## Individual Steps
 
 ### Download CSVs only

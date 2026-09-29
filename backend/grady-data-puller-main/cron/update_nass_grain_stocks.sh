@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 # Load NASS Grain Stocks data (released quarterly: end of Mar, Jun, Sep, Dec).
 # Run on 1st of Jan, Apr, Jul, Oct.
-set -e
+set -euo pipefail
 
-PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$PROJECT_DIR"
-
-source .venv/bin/activate
-
-python3 -m src.main --grain-stocks
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$SCRIPT_DIR/run_in_docker.sh" --grain-stocks

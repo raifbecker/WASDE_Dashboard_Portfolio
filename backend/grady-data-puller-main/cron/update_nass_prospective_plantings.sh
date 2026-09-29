@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 # Load NASS Prospective Plantings data (released end of March).
 # Run once in early April.
-set -e
+set -euo pipefail
 
-PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$PROJECT_DIR"
-
-source .venv/bin/activate
-
-python3 -m src.main --nass
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$SCRIPT_DIR/run_in_docker.sh" --nass

@@ -2,12 +2,12 @@
 # All times are in CST (America/Chicago)
 # Install with: crontab /path/to/project/cron/crontab
 #
-# Set PROJECT and LOGDIR below to paths on your machine.
+# Set PROJECT and LOGDIR to absolute paths on your machine.
 
 SHELL=/bin/bash
 CRON_TZ=America/Chicago
-PROJECT=/path/to/project
-LOGDIR=/path/to/project/cron/logs
+PROJECT=/path/to/repo/backend/grady-data-puller-main
+LOGDIR=/path/to/repo/backend/grady-data-puller-main/cron/logs
 
 # ┌───────── minute (0-59)
 # │ ┌─────── hour (0-23)

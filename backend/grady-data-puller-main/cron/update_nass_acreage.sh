@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 # Load NASS Acreage report data (released end of June).
 # Run once in early July.
-set -e
+set -euo pipefail
 
-PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$PROJECT_DIR"
-
-source .venv/bin/activate
-
-python3 -m src.main --acreage
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$SCRIPT_DIR/run_in_docker.sh" --acreage

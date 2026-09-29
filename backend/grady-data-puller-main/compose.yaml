@@ -1,0 +1,9 @@
+services:
+  loader:
+    build: .
+    image: wasde-loader:local
+    init: true
+    environment:
+      TZ: America/Chicago
+    volumes:
+      - ./data:/app/data
