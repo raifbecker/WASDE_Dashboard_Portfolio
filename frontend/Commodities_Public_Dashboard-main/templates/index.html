@@ -23,7 +23,13 @@
 </head>
 <body>
 
-<h4 class="mb-3">WASDE Data Explorer</h4>
+<header class="mb-4">
+  <h1 class="h3 mb-1">WASDE Data Explorer</h1>
+  <p class="text-muted mb-0">Explore USDA supply and demand estimates by region, report date, and market year.</p>
+</header>
+<div id="app-error" class="alert alert-danger d-none" role="alert">
+  Could not load dashboard data. Check that the local database is available, then refresh the page.
+</div>
 
 <ul class="nav nav-tabs mb-3" id="mainTabs" role="tablist">
   <li class="nav-item" role="presentation">
@@ -78,6 +84,10 @@
 <!-- ═══════════ Tab 2: Time Comparison (World) ═══════════ -->
 <div class="tab-pane fade" id="pane-time" role="tabpanel">
   <div class="filter-bar">
+    <div class="form-group">
+      <label for="sel2-report-type">Report Type</label>
+      <select id="sel2-report-type" class="form-select form-select-sm"></select>
+    </div>
     <div class="form-group">
       <label for="sel2-commodity">Commodity</label>
       <select id="sel2-commodity" class="form-select form-select-sm"></select>
@@ -148,10 +158,15 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Shared helpers
 // ═══════════════════════════════════════════════════════════════════════════
+$(document).ajaxError(function () {
+  $('.loading').hide();
+  $('#app-error').removeClass('d-none');
+});
+
 function fillSelect($sel, items, keepValue) {
   const prev = keepValue ? $sel.val() : null;
   $sel.empty();
-  items.forEach(i => $sel.append(`<option value="${i}">${i}</option>`));
+  items.forEach(i => $sel.append($('<option>').val(i).text(i)));
   if (prev && items.includes(prev)) $sel.val(prev);
 }
 
@@ -283,11 +298,12 @@ function fmtNumber(v) {
   }
 
   function fetchDates() {
+    const report_title = $reportType.val();
     const commodity = $commodity.val();
     const scope = $scope.val();
     if (!commodity || !scope) return;
     showLoading();
-    $.getJSON('/api/dates', { commodity, scope }, function (data) {
+    $.getJSON('/api/dates', { report_title, commodity, scope }, function (data) {
       fillSelect($date, data.dates);
       hideLoading();
       fetchMarketYears();
@@ -295,12 +311,13 @@ function fmtNumber(v) {
   }
 
   function fetchMarketYears() {
+    const report_title = $reportType.val();
     const commodity = $commodity.val();
     const scope = $scope.val();
     const report_date = $date.val();
     if (!commodity || !scope || !report_date) return;
     showLoading();
-    $.getJSON('/api/market_years', { commodity, scope, report_date }, function (data) {
+    $.getJSON('/api/market_years', { report_title, commodity, scope, report_date }, function (data) {
       fillSelect($marketYear, data.market_years);
       hideLoading();
       fetchTable();
@@ -308,6 +325,7 @@ function fmtNumber(v) {
   }
 
   function fetchTable() {
+    const report_title = $reportType.val();
     const commodity   = $commodity.val();
     const scope       = $scope.val();
     const report_date = $date.val();
@@ -315,14 +333,14 @@ function fmtNumber(v) {
     if (!commodity || !scope || !report_date || !market_year) return;
 
     showLoading();
-    $.getJSON('/api/table', { commodity, scope, report_date, market_year }, function (data) {
+    $.getJSON('/api/table', { report_title, commodity, scope, report_date, market_year }, function (data) {
       renderTable(data.columns, data.rows);
       hideLoading();
     });
   }
 
   function renderTable(regionCols, rows) {
-    if (dt) { dt.destroy(); $('#pivot-table').empty(); }
+    if (dt) { dt.destroy(); dt = null; $('#pivot-table').empty(); }
     if (!rows.length) {
       $('#pivot-table').html('<thead><tr><th>No data for this selection</th></tr></thead><tbody></tbody>');
       return;
@@ -354,6 +372,7 @@ function fmtNumber(v) {
 // Tab 2: Time Comparison (World)
 // ═══════════════════════════════════════════════════════════════════════════
 (function () {
+  const $reportType = $('#sel2-report-type');
   const $commodity  = $('#sel2-commodity');
   const $region     = $('#sel2-region');
   const $attribute  = $('#sel2-attribute');
@@ -376,12 +395,23 @@ function fmtNumber(v) {
   function init() {
     if (initialized) return;
     initialized = true;
-    fetchCommodities();
+    fetchReportTypes();
+  }
+
+  function fetchReportTypes() {
+    showLoading();
+    $.getJSON('/api/report_types', { scope: 'World' }, function (data) {
+      fillSelect($reportType, data.report_types, true);
+      hideLoading();
+      fetchCommodities();
+    });
   }
 
   function fetchCommodities() {
+    const report_title = $reportType.val();
+    if (!report_title) return;
     showLoading();
-    $.getJSON('/api/commodities', { scope: 'World' }, function (data) {
+    $.getJSON('/api/commodities', { scope: 'World', report_title }, function (data) {
       fillSelect($commodity, data.commodities, true);
       hideLoading();
       fetchRegions();
@@ -389,10 +419,11 @@ function fmtNumber(v) {
   }
 
   function fetchRegions() {
+    const report_title = $reportType.val();
     const commodity = $commodity.val();
     if (!commodity) return;
     showLoading();
-    $.getJSON('/api/world/regions', { commodity }, function (data) {
+    $.getJSON('/api/world/regions', { report_title, commodity }, function (data) {
       fillSelect($region, data.regions, true);
       hideLoading();
       fetchAttributes();
@@ -400,11 +431,12 @@ function fmtNumber(v) {
   }
 
   function fetchAttributes() {
+    const report_title = $reportType.val();
     const commodity = $commodity.val();
     const region = $region.val();
     if (!commodity || !region) return;
     showLoading();
-    $.getJSON('/api/world/attributes', { commodity, region }, function (data) {
+    $.getJSON('/api/world/attributes', { report_title, commodity, region }, function (data) {
       fillSelect($attribute, data.attributes, true);
       hideLoading();
       fetchMarketYears();
@@ -412,11 +444,12 @@ function fmtNumber(v) {
   }
 
   function fetchMarketYears() {
+    const report_title = $reportType.val();
     const commodity = $commodity.val();
     const region = $region.val();
     if (!commodity || !region) return;
     showLoading();
-    $.getJSON('/api/world/market_years', { commodity, region }, function (data) {
+    $.getJSON('/api/world/market_years', { report_title, commodity, region }, function (data) {
       fillSelect($marketYear, data.market_years, true);
       hideLoading();
       fetchAll();
@@ -429,13 +462,14 @@ function fmtNumber(v) {
   }
 
   function fetchChart() {
+    const report_title = $reportType.val();
     const commodity = $commodity.val();
     const region = $region.val();
     const attribute = $attribute.val();
     if (!commodity || !region || !attribute) return;
 
     showLoading();
-    $.getJSON('/api/world/chart', { commodity, region, attribute }, function (data) {
+    $.getJSON('/api/world/chart', { report_title, commodity, region, attribute }, function (data) {
       renderChart(data.series);
       renderStats(data.stats, data.year_summaries);
       hideLoading();
@@ -514,13 +548,14 @@ function fmtNumber(v) {
   let lastRows = [];
 
   function fetchTable() {
+    const report_title = $reportType.val();
     const commodity   = $commodity.val();
     const region      = $region.val();
     const market_year = $marketYear.val();
     if (!commodity || !region || !market_year) return;
 
     showLoading();
-    $.getJSON('/api/world/time_table', { commodity, region, market_year }, function (data) {
+    $.getJSON('/api/world/time_table', { report_title, commodity, region, market_year }, function (data) {
       lastDateCols = data.columns;
       lastRows = data.rows;
       renderTable();
@@ -529,7 +564,7 @@ function fmtNumber(v) {
   }
 
   function renderTable() {
-    if (dt) { dt.destroy(); $('#time-table').empty(); }
+    if (dt) { dt.destroy(); dt = null; $('#time-table').empty(); }
     if (!lastRows.length) {
       $('#time-table').html('<thead><tr><th>No data for this selection</th></tr></thead><tbody></tbody>');
       return;
@@ -572,6 +607,7 @@ function fmtNumber(v) {
     if (lastRows.length) renderTable();
   });
 
+  $reportType.on('change', fetchCommodities);
   $commodity.on('change', fetchRegions);
   $region.on('change', fetchAttributes);
   $attribute.on('change', fetchChart);

@@ -5,7 +5,7 @@ Downloads USDA WASDE (World Agricultural Supply and Demand Estimates) CSV report
 ## Prerequisites
 
 - Python 3.9+
-- `bash` and `curl` (for CSV downloads)
+- `bash` (the main CSV downloader uses Python `requests`; the optional latest-file script uses `curl`)
 
 ## Setup
 
@@ -27,13 +27,13 @@ python -m src.main --rebuild
 ```
 
 This will:
-1. Download all missing WASDE CSV files from USDA (2011 through the current month)
+1. Download all missing WASDE CSV files from USDA (2021 through the current month)
 2. Delete the existing `wasde.db` if present
 3. Create the SQLite schema (tables, views, unit seed data)
 4. Load all CSV files into the database
-5. Load NASS Prospective Plantings data (2010–present)
+5. Load NASS Prospective Plantings, Acreage, Grain Stocks, and Crop Progress data (from 2010 by default)
 
-The database is created at `wasde.db` in the project root.
+The database is created at `wasde.db` in the project root unless `--db` is set. The frontend expects `data/wasde.db`; for a first pull that feeds the frontend, run `python -m src.main --db data/wasde.db --download --load-csv`.
 
 ## Docker Cron Jobs
 
@@ -44,7 +44,7 @@ Build and run a job manually from this directory:
 
 ```bash
 docker compose build loader
-docker compose run --rm loader --db /app/data/wasde.db --load-csv
+docker compose run --rm loader --db /app/data/wasde.db --download --load-csv
 ```
 
 Each cron script builds the image if needed, runs its loader command, and exits
@@ -111,6 +111,9 @@ Rough data goes into `wasde_data_rough` and is compared with final data via the 
 | `--download` | Download missing CSV files from USDA |
 | `--load-csv` | Load CSV files from `data/csv/` into the database |
 | `--nass` | Load NASS Prospective Plantings data |
+| `--acreage` | Load NASS Acreage report data |
+| `--grain-stocks` | Load NASS Grain Stocks report data |
+| `--crop-progress` | Load NASS Crop Progress report data |
 | `--nass-start-year N` | Start year for NASS data (default: 2010) |
 | `--rough` | Load rough TXT report into `wasde_data_rough` |
 | `--promote-rough` | Load finalized TXT into `wasde_data`, keep rough for comparison |
@@ -118,11 +121,12 @@ Rough data goes into `wasde_data_rough` and is compared with final data via the 
 | `--txt-month M` | Month for TXT report (default: current) |
 | `--txt-year Y` | Year for TXT report (default: current) |
 | `--db PATH` | SQLite database path (default: `wasde.db`) |
+| `--rebuild-table NAME` | Drop and recreate one supported table (empty) |
 
 ## Verification
 
 ```bash
-python scripts/verify.py
+python scripts/verify.py data/wasde.db
 ```
 
 Prints row counts, date ranges, table types, and sample data from the database.

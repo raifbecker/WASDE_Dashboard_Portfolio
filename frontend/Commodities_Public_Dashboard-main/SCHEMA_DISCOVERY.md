@@ -1,6 +1,8 @@
 # WASDE Database Schema Discovery
 
-## Database: `wasde.db` (SQLite)
+## Database: `backend/grady-data-puller-main/data/wasde.db` (SQLite)
+
+The counts below are a snapshot of the local WASDE CSV pull on September 29, 2026. They will change when more reports or NASS data are loaded. The database is not committed to this repository.
 
 ---
 
@@ -8,12 +10,12 @@
 
 | Table | Rows | Description |
 |-------|------|-------------|
-| `wasde_data` | 1,348,327 | Primary fact table — final WASDE report data |
+| `wasde_data` | 232,006 | Primary fact table — final WASDE report data |
 | `wasde_data_rough` | 0 | Rough/preliminary data (currently empty) |
-| `table_types` | 139 | Report title + commodity + scope lookup |
-| `regions` | 248 | Self-referential region hierarchy (parent_id) |
+| `table_types` | 71 | Report title + commodity + scope lookup |
+| `regions` | 44 | Self-referential region hierarchy (parent_id) |
 | `units` | 34 | Unit conversion table (category, base_unit, multiplier) |
-| `load_log` | 709 | ETL load audit log |
+| `load_log` | 66 | ETL load audit log |
 
 ## Views
 
@@ -37,7 +39,7 @@
 | `report_date` | TEXT | Report publication date (YYYY-MM-DD) |
 | `wasde_number` | INTEGER | WASDE report number (NULL for non-WASDE reports) |
 | `market_year` | TEXT | Marketing year (e.g. "2024/25" or "2024") |
-| `attribute` | TEXT | **Report value name** — the measure being reported (155 distinct) |
+| `attribute` | TEXT | Report value name — the measure being reported (81 distinct in this snapshot) |
 | `value` | REAL | Raw numeric value |
 | `unit` | TEXT | Display unit string (e.g. "1,000 Acres", "Million Bushels") |
 | `proj_est_flag` | TEXT | Projection/estimate flag |
@@ -45,9 +47,9 @@
 | `forecast_year` | INTEGER | Year of the forecast |
 | `forecast_month` | INTEGER | Month of the forecast |
 | `report_title` | TEXT | Report name (from table_types) |
-| `commodity` | TEXT | Commodity name (65 distinct) |
+| `commodity` | TEXT | Commodity name (28 distinct in this snapshot) |
 | `scope` | TEXT | `U.S.`, `World`, or `None` |
-| `region` | TEXT | Country/state/aggregate name (248 distinct) |
+| `region` | TEXT | Country/aggregate name (44 distinct in this snapshot) |
 | `parent_region` | TEXT | Parent region name (from self-join on regions) |
 | `unit_category` | TEXT | Unit category (area, weight, volume, etc.) |
 | `base_unit` | TEXT | Canonical unit after conversion |
@@ -60,35 +62,21 @@
 ## Data Dimensions
 
 ### Date Range
-- **2010-03-31** to **2026-04-20** (778 distinct report dates)
+- **2021-01-01** to **2026-09-01** (66 distinct report dates). October 2025 and May–June 2026 were unavailable during the first pull.
 
 ### Scopes
 - `U.S.` — domestic reports
 - `World` — global supply/demand
 - `None` — unclassified
 
-### Commodities (65)
-Grains: Corn, Wheat, Barley, Oats, Sorghum, Rice, Rye, etc.  
-Oilseeds: Soybeans, Soybean Meal, Soybean Oil, Canola, Peanuts, Sunflower, etc.  
-Livestock: Beef, Eggs, Milk, Butter, Cheese  
-Cotton: Cotton, Upland Cotton, American Pima Cotton  
-Sugar: Sugar, Sugarbeets  
-Other: Hay, Potatoes, Dry Edible Beans/Peas, Lentils, Chickpeas, etc.  
-Aggregates: Feed Grains, Coarse Grains, Total Grains, Oilseeds, Oilmeals  
-Crop Conditions: Fieldwork, Topsoil Moisture, Subsoil Moisture, Pasture and Range
+### Commodities (28 in this snapshot)
+Examples include Corn, Wheat, Rice, Soybean Meal, Soybean Oil, Cotton, Sugar, Beef, Milk, Total Grains, and Oilseeds. Additional commodities can appear when other source families are loaded.
 
-### Key Attributes (155 total, examples)
-**Supply:** Area Planted, Area Harvested, Yield, Production, Beginning Stocks, Imports, Supply Total  
-**Use:** Feed and Residual, Food/Seed/Industrial, Ethanol, Exports, Domestic Use, Total Use  
-**Stocks:** Ending Stocks, Stocks to Use Ratio, Free Stocks, CCC Inventory  
-**Prices:** Avg. Farm Price, Avg. Farm Price - High/Low  
-**Crop Conditions:** Condition Excellent/Good/Fair/Poor/Very Poor, Emerged, Planted, Harvested
+### Key attributes (81 in this snapshot)
+Examples include Area Planted, Area Harvested, Yield, Production, Beginning Stocks, Imports, Feed and Residual, Exports, Domestic Use, Ending Stocks, Stocks to Use Ratio, and Avg. Farm Price.
 
-### Regions (248, examples)
-**Countries:** United States, China, Brazil, Argentina, India, Australia, Russia, EU-27, Canada, etc.  
-**U.S. States:** Alabama through Wyoming (all 50)  
-**Aggregates:** World, Total Foreign, Major Exporters, Major Importers, Foreign, World Less China  
-**Sub-regions:** Various state footnote variants (e.g. "Alabama 2/"), report-specific header regions
+### Regions (44 in this snapshot)
+Examples include United States, China, Brazil, Argentina, India, Australia, Russia, World, Total Foreign, Major Exporter, and World Less China. The first CSV-only pull does not contain all U.S. states.
 
 ---
 
@@ -143,22 +131,22 @@ CREATE TABLE units (
 ## Dashboard Table: v_wasde Pivot
 
 **Goal:** Display `v_wasde` data as a pivot table with:
-- **Filters:** commodity, report_date
+- **Filters:** report_title, scope, commodity, report_date, market_year
 - **Rows:** `attribute` (each report value/measure)
 - **Columns:** `region` (each country/state)
 - **Cell values:** `value`
 
 ### Query Pattern
 ```sql
-SELECT attribute, region, value, unit, market_year
+SELECT attribute, region, value, unit
 FROM v_wasde
-WHERE commodity = ? AND report_date = ?
+WHERE report_title = ? AND scope = ? AND commodity = ?
+  AND report_date = ? AND market_year = ?
 ORDER BY attribute, region
 ```
 Then pivot in Python/pandas: `df.pivot_table(index='attribute', columns='region', values='value')`
 
 ### Data Quality Notes
 - Some attributes have inconsistent casing (e.g. "Beginning Stocks" vs "Beginning stocks") — may need normalization
-- Regions include footnote variants ("Alabama 2/") — may want to filter to clean region names
 - `wasde_data_rough` is currently empty; all data is `data_source='final'`
-- ~1.35M rows total; filtering by commodity + date keeps queries manageable
+- Filtering by report title matters: some commodities occur in more than one report table.

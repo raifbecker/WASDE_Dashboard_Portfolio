@@ -32,14 +32,18 @@ def index():
 @app.route("/api/report_types")
 def api_report_types():
     """Return distinct report_title values, excluding those with no scope."""
+    scope = request.args.get("scope")
     db = get_db()
     try:
-        rows = db.execute(
+        query = (
             "SELECT DISTINCT report_title FROM v_wasde "
-            "WHERE report_title IS NOT NULL "
-            "AND scope IS NOT NULL "
-            "ORDER BY report_title"
-        ).fetchall()
+            "WHERE report_title IS NOT NULL AND scope IS NOT NULL"
+        )
+        params = ()
+        if scope:
+            query += " AND scope = ?"
+            params = (scope,)
+        rows = db.execute(query + " ORDER BY report_title", params).fetchall()
         return jsonify(report_types=[r[0] for r in rows])
     finally:
         db.close()
@@ -106,19 +110,20 @@ def api_commodities():
 
 @app.route("/api/dates")
 def api_dates():
-    """Return distinct report_dates for a given commodity + scope."""
+    """Return report dates for a report type, commodity, and scope."""
+    report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     scope = request.args.get("scope")
-    if not commodity or not scope:
+    if not report_title or not commodity or not scope:
         return jsonify(dates=[])
 
     db = get_db()
     try:
         rows = db.execute(
             "SELECT DISTINCT report_date FROM v_wasde "
-            "WHERE commodity = ? AND scope = ? "
+            "WHERE report_title = ? AND commodity = ? AND scope = ? "
             "ORDER BY report_date DESC",
-            (commodity, scope),
+            (report_title, commodity, scope),
         ).fetchall()
         return jsonify(dates=[r[0] for r in rows])
     finally:
@@ -127,20 +132,21 @@ def api_dates():
 
 @app.route("/api/market_years")
 def api_market_years():
-    """Return distinct market_years for a given commodity + scope + date."""
+    """Return market years for a report type, commodity, scope, and date."""
+    report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     scope = request.args.get("scope")
     report_date = request.args.get("report_date")
-    if not commodity or not scope or not report_date:
+    if not report_title or not commodity or not scope or not report_date:
         return jsonify(market_years=[])
 
     db = get_db()
     try:
         rows = db.execute(
             "SELECT DISTINCT market_year FROM v_wasde "
-            "WHERE commodity = ? AND scope = ? AND report_date = ? "
+            "WHERE report_title = ? AND commodity = ? AND scope = ? AND report_date = ? "
             "ORDER BY market_year DESC",
-            (commodity, scope, report_date),
+            (report_title, commodity, scope, report_date),
         ).fetchall()
         return jsonify(market_years=[r[0] for r in rows])
     finally:
@@ -152,12 +158,13 @@ def api_market_years():
 @app.route("/api/table")
 def api_table():
     """Return pivoted table data: attributes (rows) × regions (columns)."""
+    report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     scope = request.args.get("scope")
     report_date = request.args.get("report_date")
     market_year = request.args.get("market_year")
 
-    if not all([commodity, scope, report_date, market_year]):
+    if not all([report_title, commodity, scope, report_date, market_year]):
         return jsonify(columns=[], rows=[])
 
     db = get_db()
@@ -165,9 +172,10 @@ def api_table():
         df = pd.read_sql_query(
             "SELECT attribute, region, value, unit "
             "FROM v_wasde "
-            "WHERE commodity = ? AND scope = ? AND report_date = ? AND market_year = ?",
+            "WHERE report_title = ? AND commodity = ? AND scope = ? "
+            "AND report_date = ? AND market_year = ?",
             db,
-            params=(commodity, scope, report_date, market_year),
+            params=(report_title, commodity, scope, report_date, market_year),
         )
     finally:
         db.close()
@@ -207,17 +215,18 @@ def api_table():
 @app.route("/api/world/regions")
 def api_world_regions():
     """Return distinct regions for a commodity in World scope."""
+    report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
-    if not commodity:
+    if not report_title or not commodity:
         return jsonify(regions=[])
 
     db = get_db()
     try:
         rows = db.execute(
             "SELECT DISTINCT region FROM v_wasde "
-            "WHERE commodity = ? AND scope = 'World' "
+            "WHERE report_title = ? AND commodity = ? AND scope = 'World' "
             "ORDER BY region",
-            (commodity,),
+            (report_title, commodity),
         ).fetchall()
         return jsonify(regions=[r[0] for r in rows])
     finally:
@@ -227,18 +236,19 @@ def api_world_regions():
 @app.route("/api/world/market_years")
 def api_world_market_years():
     """Return distinct market_years for commodity + region in World scope."""
+    report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     region = request.args.get("region")
-    if not commodity or not region:
+    if not report_title or not commodity or not region:
         return jsonify(market_years=[])
 
     db = get_db()
     try:
         rows = db.execute(
             "SELECT DISTINCT market_year FROM v_wasde "
-            "WHERE commodity = ? AND scope = 'World' AND region = ? "
+            "WHERE report_title = ? AND commodity = ? AND scope = 'World' AND region = ? "
             "ORDER BY market_year DESC",
-            (commodity, region),
+            (report_title, commodity, region),
         ).fetchall()
         return jsonify(market_years=[r[0] for r in rows])
     finally:
@@ -248,11 +258,12 @@ def api_world_market_years():
 @app.route("/api/world/time_table")
 def api_world_time_table():
     """Return pivot: attributes (rows) × report_dates (columns) for one region."""
+    report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     region = request.args.get("region")
     market_year = request.args.get("market_year")
 
-    if not all([commodity, region, market_year]):
+    if not all([report_title, commodity, region, market_year]):
         return jsonify(columns=[], rows=[])
 
     db = get_db()
@@ -260,9 +271,10 @@ def api_world_time_table():
         df = pd.read_sql_query(
             "SELECT attribute, report_date, value, unit "
             "FROM v_wasde "
-            "WHERE commodity = ? AND scope = 'World' AND region = ? AND market_year = ?",
+            "WHERE report_title = ? AND commodity = ? AND scope = 'World' "
+            "AND region = ? AND market_year = ?",
             db,
-            params=(commodity, region, market_year),
+            params=(report_title, commodity, region, market_year),
         )
     finally:
         db.close()
@@ -295,18 +307,19 @@ def api_world_time_table():
 @app.route("/api/world/attributes")
 def api_world_attributes():
     """Return distinct attributes for commodity + region in World scope."""
+    report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     region = request.args.get("region")
-    if not commodity or not region:
+    if not report_title or not commodity or not region:
         return jsonify(attributes=[])
 
     db = get_db()
     try:
         rows = db.execute(
             "SELECT DISTINCT attribute FROM v_wasde "
-            "WHERE commodity = ? AND scope = 'World' AND region = ? "
+            "WHERE report_title = ? AND commodity = ? AND scope = 'World' AND region = ? "
             "ORDER BY attribute",
-            (commodity, region),
+            (report_title, commodity, region),
         ).fetchall()
         return jsonify(attributes=[r[0] for r in rows])
     finally:
@@ -317,11 +330,12 @@ def api_world_attributes():
 def api_world_chart():
     """Return chart data: one series per market year, x=report_month (1-12), y=value.
     Also returns statistics (mean, median, min, max, biggest drop) across years for each month."""
+    report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     region = request.args.get("region")
     attribute = request.args.get("attribute")
 
-    if not all([commodity, region, attribute]):
+    if not all([report_title, commodity, region, attribute]):
         return jsonify(series=[], stats={})
 
     db = get_db()
@@ -329,10 +343,11 @@ def api_world_chart():
         df = pd.read_sql_query(
             "SELECT market_year, report_date, value "
             "FROM v_wasde "
-            "WHERE commodity = ? AND scope = 'World' AND region = ? AND attribute = ? "
+            "WHERE report_title = ? AND commodity = ? AND scope = 'World' "
+            "AND region = ? AND attribute = ? "
             "AND value IS NOT NULL",
             db,
-            params=(commodity, region, attribute),
+            params=(report_title, commodity, region, attribute),
         )
     finally:
         db.close()
