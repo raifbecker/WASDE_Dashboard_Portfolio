@@ -122,7 +122,7 @@ def _parse_value(raw):
 def _clean_state_name(raw):
     """Extract state name from a dotted leader line, e.g. 'Alabama ...............'"""
     # Strip dots and trailing whitespace
-    name = re.sub(r'\.+$', '', raw).strip()
+    name = re.sub(r'\.+$', '', raw.strip()).strip()
     # Handle multi-word states that may be split oddly
     name = re.sub(r'\s+', ' ', name).strip()
     return name

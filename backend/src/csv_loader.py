@@ -105,11 +105,12 @@ def _load_dataframe(conn, df, source_label):
         if not report_title:
             continue
 
-        if report_title not in table_type_cache:
+        table_type_key = (report_title, commodity)
+        if table_type_key not in table_type_cache:
             scope = infer_scope(report_title)
             tt_id = get_or_create_table_type(conn, report_title, commodity, scope)
-            table_type_cache[report_title] = tt_id
-        table_type_id = table_type_cache[report_title]
+            table_type_cache[table_type_key] = tt_id
+        table_type_id = table_type_cache[table_type_key]
 
         if region_name not in region_cache:
             r_id = get_or_create_region(conn, region_name)

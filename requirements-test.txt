@@ -1,0 +1,4 @@
+-r backend/requirements.txt
+-r frontend/requirements.txt
+pytest>=8,<10
+playwright>=1.50,<2
