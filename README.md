@@ -1,4 +1,6 @@
 # WASDE Dashboard Portfolio
+<img width="3762" height="1258" alt="image" src="https://github.com/user-attachments/assets/903fcc74-3ab5-4c9d-b9d0-20b4112e119b" />
+<img width="3774" height="954" alt="image" src="https://github.com/user-attachments/assets/2fcac7dc-6886-4598-a4e1-6ddfba0d0e0f" />
 
 A Flask dashboard for exploring USDA World Agricultural Supply and Demand Estimates (WASDE) data. The backend downloads monthly USDA CSV reports into SQLite; the frontend shows regional tables and world time comparisons.
 
