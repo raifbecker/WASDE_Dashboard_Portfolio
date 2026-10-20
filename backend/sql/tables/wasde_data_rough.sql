@@ -14,11 +14,13 @@ CREATE TABLE IF NOT EXISTS wasde_data_rough (
     release_date TEXT,
     release_time TEXT,
     forecast_year INTEGER,
-    forecast_month INTEGER
+    forecast_month INTEGER,
+    reliability_projection TEXT,
+    csv_source_file TEXT
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_wasde_rough_unique
-    ON wasde_data_rough(report_date, table_type_id, region_id, attribute, market_year);
+-- The complete observation index is created by db._migrate_observation_keys.
+
 
 CREATE INDEX IF NOT EXISTS idx_wasde_rough_report_date ON wasde_data_rough(report_date);
 CREATE INDEX IF NOT EXISTS idx_wasde_rough_commodity ON wasde_data_rough(table_type_id);

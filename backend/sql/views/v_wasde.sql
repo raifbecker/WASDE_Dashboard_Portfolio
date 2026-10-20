@@ -2,6 +2,8 @@ DROP VIEW IF EXISTS v_wasde;
 CREATE VIEW v_wasde AS
 SELECT
     d.id,
+    d.table_type_id,
+    d.region_id,
     d.report_date,
     d.wasde_number,
     d.market_year,
@@ -9,7 +11,8 @@ SELECT
     d.value,
     d.unit,
     d.proj_est_flag,
-    d.annual_quarter_flag,
+    COALESCE(NULLIF(d.annual_quarter_flag, ''), 'Annual') AS annual_quarter_flag,
+    COALESCE(d.reliability_projection, '') AS reliability_projection,
     d.forecast_year,
     d.forecast_month,
     t.report_title,
@@ -30,6 +33,8 @@ LEFT JOIN units u ON d.unit_id = u.id
 UNION ALL
 SELECT
     d.id,
+    d.table_type_id,
+    d.region_id,
     d.report_date,
     d.wasde_number,
     d.market_year,
@@ -37,7 +42,8 @@ SELECT
     d.value,
     d.unit,
     d.proj_est_flag,
-    d.annual_quarter_flag,
+    COALESCE(NULLIF(d.annual_quarter_flag, ''), 'Annual') AS annual_quarter_flag,
+    COALESCE(d.reliability_projection, '') AS reliability_projection,
     d.forecast_year,
     d.forecast_month,
     t.report_title,
@@ -62,6 +68,9 @@ WHERE NOT EXISTS (
       AND m.region_id = d.region_id
       AND m.attribute = d.attribute
       AND m.market_year = d.market_year
+      AND COALESCE(m.unit, '') = COALESCE(d.unit, '')
+      AND COALESCE(NULLIF(m.annual_quarter_flag, ''), 'Annual') = COALESCE(NULLIF(d.annual_quarter_flag, ''), 'Annual')
+      AND COALESCE(m.reliability_projection, '') = COALESCE(d.reliability_projection, '')
 )
 
 order BY report_date

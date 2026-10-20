@@ -2,7 +2,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "wasde.db"
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "wasde.db"
 
 
 def verify(db_path=None):

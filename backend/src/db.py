@@ -2,7 +2,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "wasde.db"
+DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "wasde.db"
 
 # Words that should keep their exact casing when encountered (case-insensitive lookup)
 _ABBREVIATIONS = {"U.S.", "EU-27", "EU-27+UK", "FSU-12", "UK"}
@@ -72,10 +72,11 @@ TABLE_ORDER = [
 # Views must be created in dependency order (v_wasde first, others depend on it)
 VIEW_ORDER = [
     "v_wasde",
+    "v_dashboard",
     "v_latest_estimates",
-    "v_month_over_month",
     "v_supply_use_balance",
     "v_revision_history",
+    "v_month_over_month",
     "v_world_with_hierarchy",
     "v_rough_vs_final",
 ]
@@ -87,6 +88,7 @@ def _read_sql(subdir, name):
 
 def get_connection(db_path=None):
     path = db_path or DEFAULT_DB_PATH
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -96,6 +98,7 @@ def get_connection(db_path=None):
 def create_tables(conn):
     for table in TABLE_ORDER:
         conn.executescript(_read_sql("tables", table))
+    _migrate_observation_keys(conn)
     # Migrate old-format table_types rows where report_title = "Prospective Plantings - Corn"
     _migrate_table_types(conn)
     # Backfill unit_id for any rows with a unit string but no unit_id
@@ -109,9 +112,48 @@ def create_tables(conn):
         SET unit_id = (SELECT u.id FROM units u WHERE u.name = wasde_data_rough.unit)
         WHERE unit IS NOT NULL AND unit_id IS NULL
     """)
+    # CREATE VIEW IF NOT EXISTS would otherwise keep old, incorrect definitions.
+    for view in reversed(VIEW_ORDER):
+        conn.execute(f"DROP VIEW IF EXISTS {view}")
     for view in VIEW_ORDER:
         conn.executescript(_read_sql("views", view))
     conn.commit()
+
+
+def _migrate_observation_keys(conn):
+    """Keep period, unit and reliability statistics separate, including on old DBs.
+
+    Previously discarded rows cannot be recovered by changing an index. Replaying
+    the saved CSVs restores them; CSV loading no longer trusts the old load log.
+    """
+    for table, index in (("wasde_data", "idx_wasde_unique"),
+                         ("wasde_data_rough", "idx_wasde_rough_unique")):
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for column in ("reliability_projection", "csv_source_file"):
+            if column not in columns:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT")
+        conn.execute(f"DROP INDEX IF EXISTS {index}")
+        conn.execute(f"""CREATE UNIQUE INDEX {index} ON {table} (
+            report_date, table_type_id, region_id, attribute, market_year,
+            COALESCE(unit, ''),
+            COALESCE(NULLIF(annual_quarter_flag, ''), 'Annual'),
+            COALESCE(reliability_projection, '')
+        )""")
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS csv_versions (
+            source_file TEXT NOT NULL, sha256 TEXT NOT NULL,
+            raw_content BLOB NOT NULL,
+            loaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (source_file, sha256)
+        );
+        CREATE TABLE IF NOT EXISTS csv_sources (
+            source_file TEXT PRIMARY KEY, sha256 TEXT NOT NULL,
+            row_count INTEGER NOT NULL,
+            loaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (source_file, sha256)
+                REFERENCES csv_versions(source_file, sha256)
+        );
+    """)
 
 
 def _migrate_table_types(conn):
@@ -218,6 +260,8 @@ def rebuild_table(conn, table_name):
         raise ValueError(f"Unknown table: {table_name}. Valid tables: {TABLE_ORDER}")
     conn.execute(f"DROP TABLE IF EXISTS {table_name}")
     conn.executescript(_read_sql("tables", table_name))
+    if table_name in {"wasde_data", "wasde_data_rough"}:
+        _migrate_observation_keys(conn)
     conn.commit()
 
 

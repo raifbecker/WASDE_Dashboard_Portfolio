@@ -5,7 +5,7 @@ Downloads USDA WASDE (World Agricultural Supply and Demand Estimates) CSV report
 ## Prerequisites
 
 - Python 3.9+
-- `bash` (the main CSV downloader uses Python `requests`; the optional latest-file script uses `curl`)
+- The main CSV command uses the active Python interpreter. Bash/curl are only needed for optional shell/cron scripts.
 
 ## Setup
 
@@ -33,7 +33,7 @@ This will:
 4. Load all CSV files into the database
 5. Load NASS Prospective Plantings, Acreage, Grain Stocks, and Crop Progress data (from 2010 by default)
 
-The database is created at `wasde.db` in the project root unless `--db` is set. The frontend expects `data/wasde.db`; for a first pull that feeds the frontend, run `python -m src.main --db data/wasde.db --download --load-csv`.
+The database defaults to `backend/data/wasde.db` (the frontend default), regardless of your current directory. The frontend expects `data/wasde.db`; for a first pull that feeds the frontend, run `python -m src.main --db data/wasde.db --download --load-csv`.
 
 ## Docker Cron Jobs
 
@@ -72,7 +72,7 @@ Downloads any missing monthly CSV files from `https://www.usda.gov/sites/default
 python -m src.main --load-csv
 ```
 
-Loads all CSV files from `data/csv/` into the database. Files already loaded (tracked in `load_log`) are skipped.
+Loads all CSV files from `data/csv/` into the database. Unchanged CSV bytes are skipped using `csv_sources.sha256`. Changed files atomically replace their own observations; `load_log` records the number of distinct observations published, rather than attempted inserts. Raw accepted CSV versions are retained in `csv_versions`.
 
 ### Load NASS Prospective Plantings
 
@@ -161,3 +161,7 @@ Prints row counts, date ranges, table types, and sample data from the database.
 - **WASDE CSVs**: `https://www.usda.gov/sites/default/files/documents/oce-wasde-report-data-{YYYY}-{MM}.csv`
 - **WASDE TXT** (rough reports): `https://www.usda.gov/oce/commodity/wasde/wasde{MMYY}.txt`
 - **NASS Prospective Plantings**: ESMIS API (`https://esmis.nal.usda.gov/api/v1`)
+
+## Integrity fixes and walkthrough
+
+See [the usage and code walkthrough](../docs/CODE_WALKTHROUGH.md) for the transaction boundary, record key, corrected-file handling, and an offline first run. `--refresh-csv` re-fetches existing CSVs and loads validated changes. This CSV behavior does not extend to the separate NASS, TXT, or XML loaders.
