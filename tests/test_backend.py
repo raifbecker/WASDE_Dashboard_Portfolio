@@ -1,4 +1,5 @@
 import importlib.util
+from contextlib import closing
 import sqlite3
 import sys
 import xml.etree.ElementTree as ET
@@ -150,10 +151,12 @@ def downloader_module():
 
 def test_downloader_response_classes_and_existing_file(tmp_path, monkeypatch):
     script = downloader_module()
+    monkeypatch.setattr(script, 'discover_report_urls', lambda: {})
 
     class Response:
         status_code = 200
-        content = b"one,two\n1,2\n"
+        content = (b"ReportDate,ReportTitle,Commodity,Region,Attribute,MarketYear,Value,Unit\n"
+                   b"January 2026,World Corn,Corn,World,Production,2025/26,10,Million Metric Tons\n")
 
         def raise_for_status(self):
             pass
@@ -190,7 +193,7 @@ def test_downloader_response_classes_and_existing_file(tmp_path, monkeypatch):
 
 def test_cli_option_dispatch_and_rebuild_only_temporary_db(tmp_path, monkeypatch):
     path = tmp_path / "cli.db"
-    with sqlite3.connect(path) as old:
+    with closing(sqlite3.connect(path)) as old:
         old.execute("CREATE TABLE stale(id INTEGER)")
     calls = []
     monkeypatch.setattr(main, "download_csvs", lambda: calls.append("download"))

@@ -1,6 +1,7 @@
 """Real Chromium checks against the same disposable database used by API tests."""
 
 import os
+import sqlite3
 import threading
 from pathlib import Path
 
@@ -62,6 +63,7 @@ def test_regional_filters_table_and_csv_export(page):
     tab, url, external, errors = page
     tab.goto(url)
     tab.locator("#sel-market-year").get_by_role("option").first.wait_for(state="attached")
+    tab.locator("#pivot-table thead th").first.wait_for(state="attached")
     assert tab.locator("#pivot-table thead").inner_text().startswith("Attribute")
 
     tab.locator("#sel-report-type").select_option(WORLD)
@@ -122,5 +124,45 @@ def test_empty_table_and_visible_api_error(page):
     tab.route("**/api/report_types", lambda route: route.fulfill(status=503, body="unavailable"))
     tab.reload()
     tab.locator("#app-error").wait_for(state="visible")
+    assert external == []
+    assert errors == []
+
+
+def test_chart_preserves_cross_year_window_and_actual_tooltip_dates(page, seeded_db):
+    with sqlite3.connect(seeded_db) as conn:
+        template = conn.execute("SELECT table_type_id,region_id FROM v_dashboard WHERE report_title=? AND region='World' LIMIT 1", (WORLD,)).fetchone()
+        for date, value in [('2025-05-01', 30), ('2026-04-01', 20), ('2026-05-01', 999)]:
+            conn.execute("INSERT INTO wasde_data(report_date,table_type_id,region_id,attribute,market_year,value,unit) VALUES (?,?,?,?,?,?,?)",
+                         (date, *template, 'Production', '2025/26', value, 'Million Metric Tons'))
+    tab, url, external, errors = page
+    tab.goto(url)
+    tab.locator('#tab-time').click()
+    tab.locator('#sel2-report-type').get_by_role('option', name=WORLD).wait_for(state='attached')
+    tab.locator('#sel2-report-type').select_option(WORLD)
+    tab.locator('#sel2-region').get_by_role('option', name='World').wait_for(state='attached')
+    tab.locator('#sel2-region').select_option('World')
+    tab.locator('#sel2-attribute').get_by_role('option', name='Production').wait_for(state='attached')
+    tab.locator('#sel2-attribute').select_option('Production')
+    tab.wait_for_function("""() => {
+        const chart = Chart.getChart(document.getElementById('year-chart'));
+        return chart && chart.data.datasets.some(s => s.label === '2025/26 (May 2025 – Apr 2026)' && s.data[11] === 20);
+    }""")
+    result = tab.evaluate("""() => {
+        const chart = Chart.getChart(document.getElementById('year-chart'));
+        const index = chart.data.datasets.findIndex(s => s.label.startsWith('2025/26'));
+        return {
+            labels: chart.data.labels,
+            values: chart.data.datasets[index].data,
+            spanGaps: chart.data.datasets[index].spanGaps,
+            tooltip: chart.options.plugins.tooltip.callbacks.label({datasetIndex: index, dataIndex: 8, raw: 10}),
+        };
+    }""")
+    assert result['labels'] == [f'Month {i}' for i in range(1, 13)]
+    assert result['values'][0] == 30
+    assert result['values'][1] is None
+    assert result['values'][8:] == [10, 7, 8, 20]
+    assert 999 not in result['values']
+    assert result['spanGaps'] is False
+    assert '2026-01-01' in result['tooltip']
     assert external == []
     assert errors == []

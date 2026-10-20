@@ -7,6 +7,8 @@ SELECT
     region,
     market_year,
     unit,
+    annual_quarter_flag,
+    reliability_projection,
     MAX(CASE WHEN attribute LIKE '%Beginning Stocks%' THEN value END) AS beginning_stocks,
     MAX(CASE WHEN attribute = 'Production' THEN value END) AS production,
     MAX(CASE WHEN attribute = 'Imports' THEN value END) AS imports,
@@ -15,4 +17,4 @@ SELECT
     MAX(CASE WHEN attribute = 'Exports' THEN value END) AS exports,
     MAX(CASE WHEN attribute LIKE '%Ending Stocks%' THEN value END) AS ending_stocks
 FROM v_wasde
-GROUP BY report_date, wasde_number, report_title, commodity, region, market_year, unit;
+GROUP BY report_date, wasde_number, report_title, commodity, region, market_year, unit, annual_quarter_flag, reliability_projection;

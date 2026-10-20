@@ -9,6 +9,8 @@ SELECT
     reg.name AS region,
     r.attribute,
     r.market_year,
+    COALESCE(NULLIF(r.annual_quarter_flag, ''), 'Annual') AS annual_quarter_flag,
+    COALESCE(r.reliability_projection, '') AS reliability_projection,
     COALESCE(r.unit, f.unit) AS unit,
     r.value AS rough_value,
     f.value AS final_value,
@@ -23,7 +25,7 @@ SELECT
         ELSE NULL
     END AS pct_change,
     CASE
-        WHEN f.value IS NULL THEN 'rough_only'
+        WHEN f.id IS NULL THEN 'rough_only'
         WHEN f.value = r.value THEN 'unchanged'
         ELSE 'revised'
     END AS status
@@ -35,4 +37,7 @@ LEFT JOIN wasde_data f
     AND f.table_type_id = r.table_type_id
     AND f.region_id = r.region_id
     AND f.attribute = r.attribute
-    AND f.market_year = r.market_year;
+    AND f.market_year = r.market_year
+    AND COALESCE(f.unit, '') = COALESCE(r.unit, '')
+    AND COALESCE(NULLIF(f.annual_quarter_flag, ''), 'Annual') = COALESCE(NULLIF(r.annual_quarter_flag, ''), 'Annual')
+    AND COALESCE(f.reliability_projection, '') = COALESCE(r.reliability_projection, '');

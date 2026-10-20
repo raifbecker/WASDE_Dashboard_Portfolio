@@ -7,6 +7,17 @@ from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
+
+@app.errorhandler(ValueError)
+def invalid_series(error):
+    return jsonify(error=str(error)), 400
+
+
+def check_units(df):
+    """A chart or pivot must never silently pick between incompatible units."""
+    if not df.empty and (df.groupby('attribute')['unit'].nunique(dropna=False) > 1).any():
+        raise ValueError('This selection contains multiple units for one measure. Use SQL to select a single unit.')
+
 _settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
 with open(_settings_path, "r") as _f:
     _settings = json.load(_f)
@@ -36,7 +47,7 @@ def api_report_types():
     db = get_db()
     try:
         query = (
-            "SELECT DISTINCT report_title FROM v_wasde "
+            "SELECT DISTINCT report_title FROM v_dashboard "
             "WHERE report_title IS NOT NULL AND scope IS NOT NULL"
         )
         params = ()
@@ -59,7 +70,7 @@ def api_filters():
             raw = [
                 r[0]
                 for r in db.execute(
-                    "SELECT DISTINCT scope FROM v_wasde "
+                    "SELECT DISTINCT scope FROM v_dashboard "
                     "WHERE scope IS NOT NULL AND report_title = ? ORDER BY scope",
                     (report_title,),
                 ).fetchall()
@@ -68,7 +79,7 @@ def api_filters():
             raw = [
                 r[0]
                 for r in db.execute(
-                    "SELECT DISTINCT scope FROM v_wasde WHERE scope IS NOT NULL ORDER BY scope"
+                    "SELECT DISTINCT scope FROM v_dashboard WHERE scope IS NOT NULL ORDER BY scope"
                 ).fetchall()
             ]
         # Pin U.S. first, World second, then any others alphabetically
@@ -93,13 +104,13 @@ def api_commodities():
     try:
         if report_title:
             rows = db.execute(
-                "SELECT DISTINCT commodity FROM v_wasde "
+                "SELECT DISTINCT commodity FROM v_dashboard "
                 "WHERE scope = ? AND report_title = ? ORDER BY commodity",
                 (scope, report_title),
             ).fetchall()
         else:
             rows = db.execute(
-                "SELECT DISTINCT commodity FROM v_wasde "
+                "SELECT DISTINCT commodity FROM v_dashboard "
                 "WHERE scope = ? ORDER BY commodity",
                 (scope,),
             ).fetchall()
@@ -120,7 +131,7 @@ def api_dates():
     db = get_db()
     try:
         rows = db.execute(
-            "SELECT DISTINCT report_date FROM v_wasde "
+            "SELECT DISTINCT report_date FROM v_dashboard "
             "WHERE report_title = ? AND commodity = ? AND scope = ? "
             "ORDER BY report_date DESC",
             (report_title, commodity, scope),
@@ -143,7 +154,7 @@ def api_market_years():
     db = get_db()
     try:
         rows = db.execute(
-            "SELECT DISTINCT market_year FROM v_wasde "
+            "SELECT DISTINCT market_year FROM v_dashboard "
             "WHERE report_title = ? AND commodity = ? AND scope = ? AND report_date = ? "
             "ORDER BY market_year DESC",
             (report_title, commodity, scope, report_date),
@@ -171,7 +182,7 @@ def api_table():
     try:
         df = pd.read_sql_query(
             "SELECT attribute, region, value, unit "
-            "FROM v_wasde "
+            "FROM v_dashboard "
             "WHERE report_title = ? AND commodity = ? AND scope = ? "
             "AND report_date = ? AND market_year = ?",
             db,
@@ -183,7 +194,8 @@ def api_table():
     if df.empty:
         return jsonify(columns=[], rows=[])
 
-    # Build a unit lookup per attribute (take first non-null)
+    # Validate units before making a display label.
+    check_units(df)
     unit_map = df.dropna(subset=["unit"]).drop_duplicates("attribute").set_index("attribute")["unit"].to_dict()
 
     # Pivot: attribute rows × region columns
@@ -223,7 +235,7 @@ def api_world_regions():
     db = get_db()
     try:
         rows = db.execute(
-            "SELECT DISTINCT region FROM v_wasde "
+            "SELECT DISTINCT region FROM v_dashboard "
             "WHERE report_title = ? AND commodity = ? AND scope = 'World' "
             "ORDER BY region",
             (report_title, commodity),
@@ -245,7 +257,7 @@ def api_world_market_years():
     db = get_db()
     try:
         rows = db.execute(
-            "SELECT DISTINCT market_year FROM v_wasde "
+            "SELECT DISTINCT market_year FROM v_dashboard "
             "WHERE report_title = ? AND commodity = ? AND scope = 'World' AND region = ? "
             "ORDER BY market_year DESC",
             (report_title, commodity, region),
@@ -270,7 +282,7 @@ def api_world_time_table():
     try:
         df = pd.read_sql_query(
             "SELECT attribute, report_date, value, unit "
-            "FROM v_wasde "
+            "FROM v_dashboard "
             "WHERE report_title = ? AND commodity = ? AND scope = 'World' "
             "AND region = ? AND market_year = ?",
             db,
@@ -282,6 +294,7 @@ def api_world_time_table():
     if df.empty:
         return jsonify(columns=[], rows=[])
 
+    check_units(df)
     unit_map = df.dropna(subset=["unit"]).drop_duplicates("attribute").set_index("attribute")["unit"].to_dict()
 
     pivot = df.pivot_table(
@@ -316,7 +329,7 @@ def api_world_attributes():
     db = get_db()
     try:
         rows = db.execute(
-            "SELECT DISTINCT attribute FROM v_wasde "
+            "SELECT DISTINCT attribute FROM v_dashboard "
             "WHERE report_title = ? AND commodity = ? AND scope = 'World' AND region = ? "
             "ORDER BY attribute",
             (report_title, commodity, region),
@@ -328,8 +341,7 @@ def api_world_attributes():
 
 @app.route("/api/world/chart")
 def api_world_chart():
-    """Return chart data: one series per market year, x=report_month (1-12), y=value.
-    Also returns statistics (mean, median, min, max, biggest drop) across years for each month."""
+    """Compare each market year's first available 12-month report window."""
     report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     region = request.args.get("region")
@@ -341,11 +353,10 @@ def api_world_chart():
     db = get_db()
     try:
         df = pd.read_sql_query(
-            "SELECT market_year, report_date, value "
-            "FROM v_wasde "
+            "SELECT market_year, report_date, value, unit, attribute "
+            "FROM v_dashboard "
             "WHERE report_title = ? AND commodity = ? AND scope = 'World' "
-            "AND region = ? AND attribute = ? "
-            "AND value IS NOT NULL",
+            "AND region = ? AND attribute = ?",
             db,
             params=(report_title, commodity, region, attribute),
         )
@@ -355,25 +366,34 @@ def api_world_chart():
     if df.empty:
         return jsonify(series=[], stats={})
 
+    check_units(df)
     df["report_date"] = pd.to_datetime(df["report_date"])
-    df["month"] = df["report_date"].dt.month
-    df["month_name"] = df["report_date"].dt.strftime("%b")
+    df["report_month"] = df["report_date"].dt.to_period("M")
 
     # Build one series per market year
     series = []
     year_chronological = {}  # market_year -> values sorted by report_date
     for my, grp in df.groupby("market_year"):
-        # Take last value per month (in case of multiple reports in same month)
-        monthly = grp.sort_values("report_date").groupby("month").last().reset_index()
-        monthly = monthly.sort_values("month")
+        # Keep the calendar year when grouping. July 2025 and July 2026
+        # are different months; the latter is outside this 12-month window.
+        start = grp["report_month"].min()
+        window = pd.period_range(start, periods=12, freq="M")
+        monthly = (grp.sort_values("report_date")
+                   .drop_duplicates("report_month", keep="last")
+                   .set_index("report_month").reindex(window))
+        values = [None if pd.isna(value) else float(value) for value in monthly["value"]]
         series.append({
             "market_year": my,
-            "months": monthly["month"].tolist(),
-            "values": monthly["value"].tolist(),
+            "months": [month.month for month in window],
+            "labels": [month.strftime("%b %Y") for month in window],
+            "report_dates": [None if pd.isna(date) else date.strftime("%Y-%m-%d")
+                             for date in monthly["report_date"]],
+            "window_start": str(window[0]),
+            "window_end": str(window[-1]),
+            "values": values,
         })
-        # For summaries, use chronological order (all reports, no month grouping)
-        chrono = grp.sort_values("report_date").drop_duplicates("report_date", keep="last")
-        year_chronological[my] = chrono["value"].tolist()
+        # Summaries must describe the same window as the chart.
+        year_chronological[my] = [value for value in values if value is not None]
 
     # Sort series by market_year descending (most recent first)
     series.sort(key=lambda s: s["market_year"], reverse=True)

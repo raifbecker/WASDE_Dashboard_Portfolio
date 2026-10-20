@@ -3,6 +3,7 @@ import logging
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from src.db import DEFAULT_DB_PATH, create_tables, get_connection
@@ -24,14 +25,19 @@ logger = logging.getLogger(__name__)
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 
 
-def download_csvs():
-    """Run the bash script to download any missing WASDE CSV files."""
-    script = SCRIPTS_DIR / "download_csvs.sh"
+def download_csvs(refresh=False, csv_dir=None):
+    """Use this environment's Python; no Bash installation is needed."""
+    script = SCRIPTS_DIR / "download_csv.py"
     if not script.exists():
         logger.error("Download script not found: %s", script)
         sys.exit(1)
     logger.info("Downloading missing CSV files...")
-    result = subprocess.run(["bash", str(script)], check=False)
+    now = datetime.now()
+    command = [sys.executable, str(script), str(csv_dir or SCRIPTS_DIR.parent / 'data' / 'csv'),
+               '2021', str(now.year), str(now.month)]
+    if refresh:
+        command.append('--refresh')
+    result = subprocess.run(command, check=False)
     if result.returncode != 0:
         logger.error("CSV download script failed with exit code %d", result.returncode)
         sys.exit(1)
@@ -55,6 +61,9 @@ def main():
         "--load-csv", action="store_true",
         help="Load CSV files from data/csv/ into the database",
     )
+    parser.add_argument('--refresh-csv', action='store_true',
+                        help='Re-fetch existing CSVs to detect USDA corrections, then load them')
+    parser.add_argument('--csv-dir', type=Path, help='Read CSVs from this directory')
     parser.add_argument(
         "--nass", action="store_true",
         help="Load NASS Prospective Plantings data",
@@ -100,6 +109,9 @@ def main():
         help="Drop and recreate a specific table (empty)",
     )
     args = parser.parse_args()
+    if args.refresh_csv:
+        args.download = True
+        args.load_csv = True
 
     if not (args.rebuild or args.download or args.load_csv or args.nass
             or args.acreage or args.grain_stocks or args.crop_progress
@@ -124,7 +136,12 @@ def main():
         args.crop_progress = True
 
     if args.download:
-        download_csvs()
+        if args.csv_dir:
+            download_csvs(refresh=args.refresh_csv, csv_dir=args.csv_dir)
+        elif args.refresh_csv:
+            download_csvs(refresh=True)
+        else:
+            download_csvs()
 
     conn = get_connection(args.db)
     create_tables(conn)
@@ -132,7 +149,7 @@ def main():
     try:
         if args.load_csv:
             logger.info("Loading CSV files into database...")
-            total = load_csv_files(conn)
+            total = load_csv_files(conn, args.csv_dir) if args.csv_dir else load_csv_files(conn)
             logger.info("CSV load complete: %d total rows", total)
 
         if args.nass:

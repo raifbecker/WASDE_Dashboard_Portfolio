@@ -2,6 +2,8 @@
 
 A Flask dashboard for exploring USDA World Agricultural Supply and Demand Estimates (WASDE) data. The backend downloads monthly USDA CSV reports into SQLite; the frontend shows regional tables and world time comparisons.
 
+Start with the [plain-English code and usage guide](docs/CODE_WALKTHROUGH.md), including Windows PowerShell commands and an offline sample. See [integrity changes and verification](docs/INTEGRITY_FIXES.md).
+
 ## Run locally
 
 Use Python 3.9 or newer. From the repository root:
@@ -21,9 +23,9 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open <http://localhost:5000>. The frontend's `settings.json` points to `backend/data/wasde.db` using a relative path. The database and downloaded CSVs live under `backend/data/` and are intentionally excluded from Git. A fresh clone needs the backend pull before the dashboard can show data.
+Open <http://localhost:5000>. The frontend's `settings.json` points to `backend/data/wasde.db` using a relative path. The database and downloaded CSVs live under `backend/data/` and are intentionally excluded from Git. A fresh clone needs a backend load before the dashboard can show data; use the offline fixture walkthrough or the live pull above.
 
-The first pull starts at January 2021. The downloader skips unavailable monthly files and retries them on later runs. Check the console output for missing months; a successful exit currently does not guarantee complete coverage. See the [download verification plan](backend/DOWNLOAD_VERIFICATION_PLAN.md) for the proposed integrity improvements.
+The first live pull starts at January 2021. HTTP 404 months are reported and skipped; other download or validation failures cause a nonzero exit. A successful exit still does not prove complete historical coverage. CSVs are validated before the cached file is replaced. The loader hashes their bytes and atomically replaces changed source snapshots, retaining accepted raw versions. Use `python -m src.main --refresh-csv` from `backend/` to check existing remote files for corrections. See the [integrity changes](docs/INTEGRITY_FIXES.md).
 
 ## Project files
 
@@ -31,7 +33,7 @@ The first pull starts at January 2021. The downloader skips unavailable monthly 
 - [Frontend app](frontend/app.py) and [template](frontend/templates/index.html): Flask API and dashboard UI.
 - [Schema note](frontend/SCHEMA_DISCOVERY.md): schema and a dated local database snapshot.
 
-Data source: [USDA WASDE](https://www.usda.gov/oce/commodity/wasde). This repository contains code and documentation; it does not include USDA report files or a prebuilt database.
+Data source: [USDA WASDE](https://www.usda.gov/oce/commodity/wasde). This repository includes one historical USDA CSV in `tests/fixtures/` for reproducible tests and an offline first run. It does not include a prebuilt database or a complete report archive.
 
 ## Run the tests
 
@@ -57,3 +59,15 @@ Run each layer, then the complete suite:
 The browser tests launch a temporary Flask server on `127.0.0.1` and headless Chromium. They block and record requests outside that server; all dashboard JavaScript and CSS is served locally. If the browser suite fails before loading the page, confirm that Chromium was installed into `.venv/playwright-browsers`, the Linux libraries are present, and local loopback connections are allowed. A failed API or loader test can be rerun by name with `.venv/bin/python -m pytest tests/test_api.py::test_regional_pivot_and_empty_result -q`.
 
 The shared fixture in `tests/conftest.py` seeds U.S. and World reports, multiple regions and dates, two market years, and a missing value. Loader tests use small CSV, TXT, and XML samples plus mocked NASS and HTTP responses. Browser tests exercise filter changes, tables, chart statistics, exports, empty data, and an API failure.
+
+The dashboard displays annual estimates. Quarterly observations and reliability statistics are retained in SQL but excluded from its existing charts and tables. Mixed units for one measure produce an explicit API error rather than an arbitrary value.
+
+## FAQ
+
+### Where is the October 2025 report?
+
+USDA canceled the October 2025 WASDE report because of the federal government
+shutdown. No report was published for that month, so the dashboard leaves a gap
+between September and November rather than filling in an estimate. This is an
+expected gap, not a download failure. See [contemporaneous reporting](https://www.dtnpf.com/agriculture/web/ag/news/article/2025/10/09/watching)
+and the [USDA historical archive](https://www.usda.gov/historical-wasde-report-data-3).

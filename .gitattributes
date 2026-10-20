@@ -1,0 +1,2 @@
+# Preserve the bytes used by the public-fixture SHA-256 regression check.
+tests/fixtures/*.csv -text whitespace=cr-at-eol
