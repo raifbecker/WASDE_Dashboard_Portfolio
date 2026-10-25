@@ -161,7 +161,3 @@ Prints row counts, date ranges, table types, and sample data from the database.
 - **WASDE CSVs**: `https://www.usda.gov/sites/default/files/documents/oce-wasde-report-data-{YYYY}-{MM}.csv`
 - **WASDE TXT** (rough reports): `https://www.usda.gov/oce/commodity/wasde/wasde{MMYY}.txt`
 - **NASS Prospective Plantings**: ESMIS API (`https://esmis.nal.usda.gov/api/v1`)
-
-## Integrity fixes and walkthrough
-
-See [the usage and code walkthrough](../docs/CODE_WALKTHROUGH.md) for the transaction boundary, record key, corrected-file handling, and an offline first run. `--refresh-csv` re-fetches existing CSVs and loads validated changes. This CSV behavior does not extend to the separate NASS, TXT, or XML loaders.

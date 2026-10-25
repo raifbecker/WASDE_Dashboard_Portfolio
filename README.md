@@ -4,8 +4,6 @@
 
 A Flask dashboard for exploring USDA World Agricultural Supply and Demand Estimates (WASDE) data. The backend downloads monthly USDA CSV reports into SQLite; the frontend shows regional tables and world time comparisons.
 
-Start with the [plain-English code and usage guide](docs/CODE_WALKTHROUGH.md), including Windows PowerShell commands and an offline sample. See [integrity changes and verification](docs/INTEGRITY_FIXES.md).
-
 ## Run locally
 
 Use Python 3.9 or newer. From the repository root:
@@ -25,15 +23,15 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open <http://localhost:5000>. The frontend's `settings.json` points to `backend/data/wasde.db` using a relative path. The database and downloaded CSVs live under `backend/data/` and are intentionally excluded from Git. A fresh clone needs a backend load before the dashboard can show data; use the offline fixture walkthrough or the live pull above.
+Open <http://localhost:5000>. The frontend's `settings.json` points to `backend/data/wasde.db` using a relative path. The database and downloaded CSVs live under `backend/data/` and are intentionally excluded from Git. A fresh clone needs a backend load before the dashboard can show data; run the live pull above.
 
-The first live pull starts at January 2021. HTTP 404 months are reported and skipped; other download or validation failures cause a nonzero exit. A successful exit still does not prove complete historical coverage. CSVs are validated before the cached file is replaced. The loader hashes their bytes and atomically replaces changed source snapshots, retaining accepted raw versions. Use `python -m src.main --refresh-csv` from `backend/` to check existing remote files for corrections. See the [integrity changes](docs/INTEGRITY_FIXES.md).
+The first live pull starts at January 2021. HTTP 404 months are reported and skipped; other download or validation failures cause a nonzero exit. A successful exit still does not prove complete historical coverage. CSVs are validated before the cached file is replaced. The loader hashes their bytes and atomically replaces changed source snapshots, retaining accepted raw versions. Use `python -m src.main --refresh-csv` from `backend/` to check existing remote files for corrections.
 
 ## Project files
 
 - [Backend guide](backend/README.md): loader commands, scheduled jobs, and database schema.
 - [Frontend app](frontend/app.py) and [template](frontend/templates/index.html): Flask API and dashboard UI.
-- [Schema note](frontend/SCHEMA_DISCOVERY.md): schema and a dated local database snapshot.
+- [Schema note](docs/SCHEMA_DISCOVERY.md): current database tables, views, and dashboard query.
 
 Data source: [USDA WASDE](https://www.usda.gov/oce/commodity/wasde). This repository includes one historical USDA CSV in `tests/fixtures/` for reproducible tests and an offline first run. It does not include a prebuilt database or a complete report archive.
 
