@@ -341,7 +341,7 @@ def api_world_attributes():
 
 @app.route("/api/world/chart")
 def api_world_chart():
-    """Compare each market year's latest available 12-month report window."""
+    """Compare each market year in chronological report order."""
     report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     region = request.args.get("region")
@@ -353,7 +353,7 @@ def api_world_chart():
     db = get_db()
     try:
         df = pd.read_sql_query(
-            "SELECT market_year, report_date, value, unit, attribute "
+            "SELECT market_year, report_date, value, unit, attribute, proj_est_flag "
             "FROM v_dashboard "
             "WHERE report_title = ? AND commodity = ? AND scope = 'World' "
             "AND region = ? AND attribute = ?",
@@ -369,29 +369,25 @@ def api_world_chart():
     check_units(df)
     df["report_date"] = pd.to_datetime(df["report_date"])
     df["report_month"] = df["report_date"].dt.to_period("M")
+    window = pd.period_range(df["report_month"].min(), df["report_month"].max(), freq="M")
+    statuses = {"Proj.": "Forecast", "Est.": "Current estimate"}
 
-    # Build one series per market year
     series = []
-    year_chronological = {}  # market_year -> values sorted by report_date
+    year_chronological = {}
     for my, grp in df.groupby("market_year"):
-        end = grp["report_month"].max()
-        window = pd.period_range(end=end, periods=12, freq="M")
-        monthly = (grp.sort_values("report_date")
-                   .drop_duplicates("report_month", keep="last")
-                   .set_index("report_month").reindex(window))
-        values = [None if pd.isna(value) else float(value) for value in monthly["value"]]
+        available = (grp.dropna(subset=["value"]).sort_values("report_date")
+                     .drop_duplicates("report_month", keep="last"))
+        monthly = available.set_index("report_month").reindex(window)
         series.append({
             "market_year": my,
-            "months": [month.month for month in window],
             "labels": [month.strftime("%b %Y") for month in window],
             "report_dates": [None if pd.isna(date) else date.strftime("%Y-%m-%d")
                              for date in monthly["report_date"]],
-            "window_start": str(window[0]),
-            "window_end": str(window[-1]),
-            "values": values,
+            "statuses": [None if pd.isna(date) else statuses.get(str(flag).strip("() "), "Reported")
+                         for date, flag in zip(monthly["report_date"], monthly["proj_est_flag"])],
+            "values": [None if pd.isna(value) else float(value) for value in monthly["value"]],
         })
-        # Summaries must describe the same window as the chart.
-        year_chronological[my] = [value for value in values if value is not None]
+        year_chronological[my] = available["value"].tolist()
 
     # Sort series by market_year descending (most recent first)
     series.sort(key=lambda s: s["market_year"], reverse=True)
