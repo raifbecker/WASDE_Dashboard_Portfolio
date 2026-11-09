@@ -1,4 +1,7 @@
 # WASDE Dashboard Portfolio
+
+<img width="1847" height="672" alt="image" src="https://github.com/user-attachments/assets/2144e257-b38e-42f5-9e41-82eff5405943" />
+
 <img width="1866" height="855" alt="image" src="https://github.com/user-attachments/assets/40586d2a-ca8e-4dcc-a150-3e00725f0bb0" />
 
 <img width="3774" height="954" alt="image" src="https://github.com/user-attachments/assets/2fcac7dc-6886-4598-a4e1-6ddfba0d0e0f" />
