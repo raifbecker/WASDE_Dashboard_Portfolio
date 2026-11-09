@@ -145,7 +145,7 @@ def test_chart_preserves_cross_year_window_and_actual_tooltip_dates(page, seeded
     tab.locator('#sel2-attribute').select_option('Production')
     tab.wait_for_function("""() => {
         const chart = Chart.getChart(document.getElementById('year-chart'));
-        return chart && chart.data.datasets.some(s => s.label === '2025/26 (May 2025 – Apr 2026)' && s.data[11] === 20);
+        return chart && chart.data.datasets.some(s => s.label === '2025/26 (Jun 2025 – May 2026)' && s.data[11] === 999);
     }""")
     result = tab.evaluate("""() => {
         const chart = Chart.getChart(document.getElementById('year-chart'));
@@ -154,14 +154,12 @@ def test_chart_preserves_cross_year_window_and_actual_tooltip_dates(page, seeded
             labels: chart.data.labels,
             values: chart.data.datasets[index].data,
             spanGaps: chart.data.datasets[index].spanGaps,
-            tooltip: chart.options.plugins.tooltip.callbacks.label({datasetIndex: index, dataIndex: 8, raw: 10}),
+            tooltip: chart.options.plugins.tooltip.callbacks.label({datasetIndex: index, dataIndex: 7, raw: 10}),
         };
     }""")
     assert result['labels'] == [f'Month {i}' for i in range(1, 13)]
-    assert result['values'][0] == 30
-    assert result['values'][1] is None
-    assert result['values'][8:] == [10, 7, 8, 20]
-    assert 999 not in result['values']
+    assert result['values'][:7] == [None] * 7
+    assert result['values'][7:] == [10, 7, 8, 20, 999]
     assert result['spanGaps'] is False
     assert '2026-01-01' in result['tooltip']
     assert external == []

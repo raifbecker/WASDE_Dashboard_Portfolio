@@ -341,7 +341,7 @@ def api_world_attributes():
 
 @app.route("/api/world/chart")
 def api_world_chart():
-    """Compare each market year's first available 12-month report window."""
+    """Compare each market year's latest available 12-month report window."""
     report_title = request.args.get("report_title")
     commodity = request.args.get("commodity")
     region = request.args.get("region")
@@ -374,10 +374,8 @@ def api_world_chart():
     series = []
     year_chronological = {}  # market_year -> values sorted by report_date
     for my, grp in df.groupby("market_year"):
-        # Keep the calendar year when grouping. July 2025 and July 2026
-        # are different months; the latter is outside this 12-month window.
-        start = grp["report_month"].min()
-        window = pd.period_range(start, periods=12, freq="M")
+        end = grp["report_month"].max()
+        window = pd.period_range(end=end, periods=12, freq="M")
         monthly = (grp.sort_values("report_date")
                    .drop_duplicates("report_month", keep="last")
                    .set_index("report_month").reindex(window))
@@ -432,4 +430,4 @@ def api_world_chart():
     return jsonify(series=series, stats=stats, year_summaries=year_summaries)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="127.0.0.1", port=5000)

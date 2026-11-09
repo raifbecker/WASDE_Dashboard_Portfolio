@@ -69,11 +69,11 @@ def test_world_chart_statistics_and_empty_result(client):
     q = {"report_title": WORLD, "commodity": "Corn", "region": "World", "attribute": "Production"}
     data = client.get("/api/world/chart", query_string=q).json
     assert [(s["market_year"], s["values"]) for s in data["series"]] == [
-        ("2025/26", [10.0, 7.0, 8.0] + [None] * 9),
-        ("2024/25", [0.0, 4.0] + [None] * 10),
+        ("2025/26", [None] * 9 + [10.0, 7.0, 8.0]),
+        ("2024/25", [None] * 10 + [0.0, 4.0]),
     ]
-    assert data["series"][0]["months"] == list(range(1, 13))
-    assert data["series"][0]["report_dates"][:3] == ["2026-01-01", "2026-02-01", "2026-03-01"]
+    assert data["series"][0]["months"] == list(range(4, 13)) + [1, 2, 3]
+    assert data["series"][0]["report_dates"][-3:] == ["2026-01-01", "2026-02-01", "2026-03-01"]
     assert data["stats"] == {"mean_change": 1.0, "median_change": 1.0, "biggest_reduction": -2.0, "biggest_increase": 4.0}
     summaries = {r["market_year"]: r for r in data["year_summaries"]}
     assert summaries["2025/26"]["biggest_monthly_drop"] == -3.0
@@ -113,7 +113,7 @@ def test_api_does_not_mix_quarters_statistics_or_units(client, seeded_db):
 
 
 @pytest.mark.parametrize('start_month', [3, 7, 11])
-def test_chart_runs_forward_twelve_months_from_each_series_start(client, seeded_db, start_month):
+def test_chart_uses_twelve_months_ending_at_each_series_latest_report(client, seeded_db, start_month):
     import sqlite3
     import pandas as pd
     start = pd.Period(f'2023-{start_month:02}', freq='M')
@@ -125,12 +125,12 @@ def test_chart_runs_forward_twelve_months_from_each_series_start(client, seeded_
     q = dict(report_title=WORLD, commodity='Corn', region='World', attribute='Production')
     data = client.get('/api/world/chart', query_string=q).json
     series = next(s for s in data['series'] if s['market_year']=='test-window')
-    assert series['months'] == [(start + i).month for i in range(12)]
-    assert series['window_start'] == str(start)
-    assert series['window_end'] == str(start + 11)
-    assert series['values'] == [100, None, 120] + [None] * 8 + [210]
-    assert series['report_dates'][1] is None
-    assert series['report_dates'][-1] == (start + 11).start_time.strftime('%Y-%m-%d')
+    assert series['months'] == [(start + i).month for i in range(1, 13)]
+    assert series['window_start'] == str(start + 1)
+    assert series['window_end'] == str(start + 12)
+    assert series['values'] == [None, 120] + [None] * 8 + [210, 999]
+    assert series['report_dates'][0] is None
+    assert series['report_dates'][-1] == (start + 12).start_time.strftime('%Y-%m-%d')
     summary = next(s for s in data['year_summaries'] if s['market_year']=='test-window')
-    assert summary['last'] == 210
-    assert summary['total_change'] == 110
+    assert summary['last'] == 999
+    assert summary['total_change'] == 879
